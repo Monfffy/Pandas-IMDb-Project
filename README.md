@@ -1,2 +1,2 @@
-# Pandas-Project-1
-# About IMDb Movies
+# Pandas-IMDb-Project
+# About IMDb Data Analysis
