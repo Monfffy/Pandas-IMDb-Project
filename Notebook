@@ -1,0 +1,167 @@
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+%matplotlib inline
+from pandas.stats.api import ols
+from os import path
+from PIL import Image
+from IPython.display import Image
+from wordcloud import WordCloud, STOPWORDS
+from collections import Counter
+
+#movies = pd.read_csv('https://raw.githubusercontent.com/Monfffy/Pandas-Project-1/master/movie_metadata.csv')
+movies = pd.read_csv("movie_metadata.csv")
+movies.head()
+
+movies['revenue']=movies['gross']-movies['budget']
+movies.head()
+
+corrcol = ['director_facebook_likes','actor_1_facebook_likes','actor_2_facebook_likes','actor_3_facebook_likes','cast_total_facebook_likes','movie_facebook_likes','num_voted_users','num_user_for_reviews','imdb_score','revenue']
+mvcorr = movies[corrcol]
+mvcorr = mvcorr[mvcorr.director_facebook_likes != 0]
+mvcorr = mvcorr[mvcorr.actor_1_facebook_likes != 0]
+mvcorr = mvcorr[mvcorr.actor_2_facebook_likes != 0]
+mvcorr = mvcorr[mvcorr.cast_total_facebook_likes != 0]
+mvcorr = mvcorr[mvcorr.movie_facebook_likes != 0]
+correlation = mvcorr[corrcol].corr(method='pearson')
+correlation.to_csv('csv/correlation.csv',encoding='utf-8')
+fig, axes = plt.subplots()
+sns.heatmap(correlation, annot=True)
+plt.show()
+plt.close()
+
+topdir = movies.sort_values(by='director_facebook_likes', ascending=0)
+topdir = topdir[['director_name','director_facebook_likes']]
+topdir = topdir.drop_duplicates()[:50]
+topdir = topdir.set_index('director_name')
+topdir.index
+
+topdir2 = movies[['director_name','imdb_score']]
+topdir2 = topdir2.groupby(['director_name']).mean()
+topdir2 = topdir2.dropna()
+topdir2 = topdir2.sort_values(by='imdb_score', ascending=0)[:50]
+topdir2.index
+
+topdir3 = movies[['director_name','revenue']]
+topdir3 = topdir3.groupby(['director_name']).mean()
+topdir3 = topdir3.dropna()
+topdir3 = topdir3.sort_values(by='revenue', ascending=0)[:50]
+topdir3.index
+
+bestdir = topdir.index.intersection(topdir2.index)
+bestdir = bestdir.intersection(topdir3.index)
+bestdir
+
+from matplotlib_venn import venn3, venn3_circles
+set1 = set(topdir.index.values)
+set2 = set(topdir2.index.values)
+set3 = set(topdir3.index.values)
+v = venn3([set1, set2, set3], ('Top 50 FB Likes', 'Top 50 Avg. IMDB Score', 'Top 50 Avg. Revenue'))
+plt.title("Who is the best director ?", fontsize=16,fontweight='bold',family='serif')
+bestdirstr = ''.join(bestdir)
+for text in v.set_labels:
+    text.set_fontsize(12)
+    text.set_family('serif')
+plt.annotate(bestdirstr,fontsize=12,family='serif',xy=v.get_label_by_id('111').get_position()- np.array([0, 0.05]), xytext=(-50,-50),
+             ha='center',textcoords='offset points',bbox=dict(boxstyle='round,pad=0.5',fc='white'),
+             arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0.5',color='black'))
+plt.show()
+
+fb_likes = movies['movie_facebook_likes']
+gross = movies['gross']
+imdb_rating = movies['imdb_score']
+
+year = movies['title_year']
+year_filtered = year[np.isfinite(movies['title_year'])]
+fb_likes_filtered = fb_likes[np.isfinite(movies['title_year'])]
+gross_filtered = gross[np.isfinite(movies['title_year'])]
+country = movies['country']
+imdb_rating_filtered = imdb_rating[np.isfinite(movies['title_year'])]
+
+plt.scatter(year_filtered, gross_filtered, color='b')
+plt.scatter(year_filtered[country != 'USA'], gross_filtered[country != 'USA'], color='r')
+plt.show()
+
+plt.scatter(year_filtered, fb_likes_filtered, color='b' )
+plt.scatter(year_filtered[country != 'USA'], fb_likes_filtered[country != 'USA'], color='r')
+plt.show()
+
+plt.scatter(year_filtered, imdb_rating_filtered, color='b')
+plt.scatter(year_filtered[country != 'USA'], imdb_rating_filtered[country != 'USA'], color='r')
+plt.show()
+
+faces = movies['facenumber_in_poster']
+faces_filtered = faces[np.isfinite(movies['title_year'])]
+plt.scatter(year_filtered, faces_filtered, color='b' )
+plt.scatter(year_filtered[country != 'USA'], faces_filtered[country != 'USA'], color='r')
+
+plt.scatter(faces_filtered, imdb_rating_filtered, color='b' )
+plt.scatter(faces_filtered[country != 'USA'], imdb_rating_filtered[country != 'USA'], color='r')
+
+faces = movies['facenumber_in_poster'].dropna()
+scores = movies['imdb_score'].dropna()
+np.median(scores)
+
+keywords = movies['plot_keywords'].str.split('|')
+keywords = keywords.dropna()
+keywords = keywords.apply(lambda x: [item for item in x if item not in STOPWORDS])
+keywords.tail()
+
+s = ','.join(keywords.apply(lambda x:','.join(x) ))
+s = ' '.join(filter(lambda word: word not in STOPWORDS, s.split()))
+
+topwords = pd.DataFrame(Counter(s.split(',')).most_common(20))
+topwords = topwords.rename(columns = {0:'topwords',1:'counts'})
+topwords = topwords.set_index('topwords')
+topwords.to_csv('csv/topwords.csv',encoding='utf-8')
+topwords
+
+wordcloud = WordCloud(background_color="white", max_words=20, max_font_size=40, random_state=42).generate_from_text(s)
+plt.figure()
+plt.imshow(wordcloud)
+plt.axis("off")
+plt.show()
+
+USmv = movies[movies['country'] == 'USA']
+USwords = USmv['plot_keywords'].str.split('|')
+USwords = USwords.dropna()
+s1 = ','.join(USwords.apply(lambda x:','.join(x) ))
+topUSwords = pd.DataFrame(Counter(s1.split(',')).most_common(20))
+topUSwords = topUSwords.rename(columns = {0:'topUSwords',1:'counts'})
+topUSwords = topUSwords.set_index('topUSwords')
+topUSwords.to_csv('csv/topUSwords.csv',encoding='utf-8')
+topUSwords
+
+nUSmv = movies[movies['country'] != 'USA']
+nUSwords = nUSmv['plot_keywords'].str.split('|')
+nUSwords = nUSwords.dropna()
+s2 = ','.join(nUSwords.apply(lambda x:','.join(x) ))
+topnUSwords = pd.DataFrame(Counter(s2.split(',')).most_common(20))
+topnUSwords = topnUSwords.rename(columns = {0:'topNonUSwords',1:'counts'})
+topnUSwords = topnUSwords.set_index('topNonUSwords')
+topnUSwords.to_csv('csv/topNonUSwords.csv',encoding='utf-8')
+topnUSwords
+
+goodmovies = movies.sort_values(by='imdb_score', ascending=0)[:100]
+keywords = goodmovies['plot_keywords'].str.split('|')
+keywords = keywords.dropna()
+s3 = ','.join(keywords.apply(lambda x:','.join(x) ))
+s3 = ' '.join(filter(lambda word: word not in STOPWORDS, s3.split()))
+topwords_goodmv = pd.DataFrame(Counter(s3.split(',')).most_common(20))
+topwords_goodmv = topwords_goodmv.rename(columns = {0:'topwords_goodmv',1:'counts'})
+topwords_goodmv = topwords_goodmv.set_index('topwords_goodmv')
+topwords_goodmv.to_csv('csv/topwords_goodmv.csv',encoding='utf-8')
+topwords_goodmv
+
+richmovies = movies.sort_values(by='revenue', ascending=0)[:100]
+keywords = richmovies['plot_keywords'].str.split('|')
+keywords = keywords.dropna()
+s4 = ','.join(keywords.apply(lambda x:','.join(x) ))
+s4 = ' '.join(filter(lambda word: word not in STOPWORDS, s4.split()))
+topwords_richmv = pd.DataFrame(Counter(s4.split(',')).most_common(20))
+topwords_richmv = topwords_richmv.rename(columns = {0:'topwords_richmv',1:'counts'})
+topwords_richmv = topwords_richmv.set_index('topwords_richmv')
+topwords_richmv.to_csv('csv/topwords_richmv.csv',encoding='utf-8')
+topwords_richmv
